@@ -1,0 +1,95 @@
+
+# Desktop Health Check Script
+
+Write-Host "====================================="
+Write-Host "      Windows Desktop Health Check"
+Write-Host "====================================="
+Write-Host ""
+
+# System Information
+Write-Host "System Information"
+Write-Host "------------------"
+$os = Get-CimInstance Win32_OperatingSystem
+Write-Host "Computer Name :" $env:COMPUTERNAME
+Write-Host "Logged User   :" $env:USERNAME
+Write-Host "OS Version    :" $os.Caption
+Write-Host "Last Boot Time:" $os.LastBootUpTime
+Write-Host ""
+
+# Uptime
+$uptime = (Get-Date) - $os.LastBootUpTime
+Write-Host "System Uptime :" "$($uptime.Days) Days $($uptime.Hours) Hours $($uptime.Minutes) Minutes"
+Write-Host ""
+
+# CPU Usage
+Write-Host "CPU Usage"
+Write-Host "---------"
+$cpu = Get-Counter '\Processor(_Total)\% Processor Time'
+$cpuUsage = [math]::Round($cpu.CounterSamples.CookedValue,2)
+Write-Host "Current CPU Usage :" "$cpuUsage %"
+Write-Host ""
+
+# Memory Usage
+Write-Host "Memory Usage"
+Write-Host "------------"
+$totalRAM = [math]::Round($os.TotalVisibleMemorySize / 1MB,2)
+$freeRAM = [math]::Round($os.FreePhysicalMemory / 1MB,2)
+$usedRAM = [math]::Round($totalRAM - $freeRAM,2)
+$ramUsage = [math]::Round(($usedRAM / $totalRAM) * 100,2)
+
+Write-Host "Total RAM :" "$totalRAM GB"
+Write-Host "Used RAM  :" "$usedRAM GB"
+Write-Host "Free RAM  :" "$freeRAM GB"
+Write-Host "Usage     :" "$ramUsage %"
+Write-Host ""
+
+# Disk Usage
+Write-Host "Disk Usage"
+Write-Host "----------"
+Get-PSDrive -PSProvider FileSystem | ForEach-Object {
+    $used = $_.Used / 1GB
+    $free = $_.Free / 1GB
+    $total = $used + $free
+    $percent = [math]::Round(($used / $total) * 100,2)
+
+    Write-Host "Drive $($_.Name):"
+    Write-Host "  Total : $([math]::Round($total,2)) GB"
+    Write-Host "  Used  : $([math]::Round($used,2)) GB"
+    Write-Host "  Free  : $([math]::Round($free,2)) GB"
+    Write-Host "  Usage : $percent %"
+}
+Write-Host ""
+
+# Top Processes
+Write-Host "Top 5 Processes by Memory Usage"
+Write-Host "------------------------------"
+Get-Process |
+Sort-Object WorkingSet -Descending |
+Select-Object -First 5 Name,
+@{Name="Memory(MB)";Expression={[math]::Round($_.WorkingSet/1MB,2)}} |
+Format-Table -AutoSize
+Write-Host ""
+
+# Network Status
+Write-Host "Network Adapters"
+Write-Host "----------------"
+Get-NetAdapter |
+Select-Object Name, Status, LinkSpeed |
+Format-Table -AutoSize
+Write-Host ""
+
+# Recent Critical Events
+Write-Host "Recent Critical System Events (Last 24 Hours)"
+Write-Host "---------------------------------------------"
+Get-WinEvent -FilterHashtable @{
+    LogName='System'
+    Level=1,2
+    StartTime=(Get-Date).AddDays(-1)
+} -MaxEvents 10 |
+Select-Object TimeCreated, Id, LevelDisplayName, ProviderName, Message |
+Format-Table -Wrap -AutoSize
+
+Write-Host ""
+Write-Host "Health Check Completed."
+
+
